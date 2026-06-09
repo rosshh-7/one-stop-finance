@@ -9,45 +9,65 @@ import pandas as pd
 def build_features(options: dict | None, ohlcv: pd.DataFrame | None) -> dict:
     feats: dict[str, float] = {}
 
+    close = _extract_close(ohlcv)
+
     if options:
         pcr = options.get("put_call_ratio", 1.0)
-        # Normalise PCR: 0.7 → +1 (bullish), 1.0 → 0 (neutral), 1.5 → -1 (bearish)
         feats["pcr_score"] = _clamp((1.0 - pcr) / 0.5, -1, 1)
 
         feats["iv_skew"] = options.get("avg_put_iv", 30) - options.get("avg_call_iv", 30)
 
-        current_price = ohlcv["Close"].iloc[-1] if ohlcv is not None and not ohlcv.empty else None
         max_pain = options.get("max_pain")
-        if current_price and max_pain:
-            # Positive = price below max pain (bullish pull toward max pain)
-            feats["max_pain_diff"] = _clamp((max_pain - float(current_price)) / float(current_price) * 10, -1, 1)
+        if close is not None and max_pain:
+            price = float(close.iloc[-1])
+            feats["max_pain_diff"] = _clamp((max_pain - price) / price * 10, -1, 1)
         else:
             feats["max_pain_diff"] = 0.0
 
         gex = options.get("net_gex", 0)
-        feats["gex_score"] = 1.0 if gex > 0 else -0.5  # positive GEX = pinning (mildly bullish)
+        feats["gex_score"] = 1.0 if gex > 0 else -0.5
 
-    if ohlcv is not None and len(ohlcv) >= 20:
-        close = ohlcv["Close"].squeeze()
-
+    if close is not None and len(close) >= 20:
         rsi = _rsi(close, 14)
-        feats["rsi_score"] = _clamp((50 - rsi) / 30, -1, 1)  # < 30 RSI → +1, > 70 → -1
+        feats["rsi_score"] = _clamp((50 - rsi) / 30, -1, 1)
 
         macd, signal = _macd(close)
         feats["macd_score"] = 1.0 if macd > signal else -1.0
 
-        sma20 = close.rolling(20).mean().iloc[-1]
-        feats["price_vs_sma20"] = _clamp((float(close.iloc[-1]) - float(sma20)) / float(sma20) * 20, -1, 1)
+        sma20 = float(close.rolling(20).mean().iloc[-1])
+        price = float(close.iloc[-1])
+        feats["price_vs_sma20"] = _clamp((price - sma20) / sma20 * 20, -1, 1)
 
-        if len(ohlcv) >= 50:
-            sma50 = close.rolling(50).mean().iloc[-1]
-            feats["price_vs_sma50"] = _clamp((float(close.iloc[-1]) - float(sma50)) / float(sma50) * 20, -1, 1)
+        if len(close) >= 50:
+            sma50 = float(close.rolling(50).mean().iloc[-1])
+            feats["price_vs_sma50"] = _clamp((price - sma50) / sma50 * 20, -1, 1)
 
-        vol_avg = ohlcv["Volume"].squeeze().rolling(20).mean().iloc[-1]
-        last_vol = float(ohlcv["Volume"].squeeze().iloc[-1])
-        feats["volume_ratio"] = _clamp((last_vol / float(vol_avg) - 1), -1, 1)
+        volume = _extract_column(ohlcv, "Volume")
+        if volume is not None and len(volume) >= 20:
+            vol_avg = float(volume.rolling(20).mean().iloc[-1])
+            last_vol = float(volume.iloc[-1])
+            if vol_avg > 0:
+                feats["volume_ratio"] = _clamp((last_vol / vol_avg - 1), -1, 1)
 
     return feats
+
+
+def _extract_close(ohlcv: pd.DataFrame | None) -> pd.Series | None:
+    return _extract_column(ohlcv, "Close")
+
+
+def _extract_column(ohlcv: pd.DataFrame | None, col: str) -> pd.Series | None:
+    if ohlcv is None or ohlcv.empty:
+        return None
+    try:
+        # yfinance may return multi-level columns: (field, ticker)
+        if isinstance(ohlcv.columns, pd.MultiIndex):
+            series = ohlcv[col].squeeze()
+        else:
+            series = ohlcv[col]
+        return series.dropna()
+    except (KeyError, Exception):
+        return None
 
 
 def _rsi(series: pd.Series, period: int = 14) -> float:

@@ -1,6 +1,5 @@
 from fastapi import APIRouter, Depends, HTTPException
 
-from app.core.dependencies import require_feature
 from app.core.response import build_response
 from app.features.onchain_prediction.repository import get_cached_prediction, cache_prediction
 from app.features.onchain_prediction.service import compute_prediction
@@ -12,7 +11,6 @@ router = APIRouter(prefix="/onchain-prediction", tags=["onchain-prediction"])
 @router.get("/{symbol}")
 async def get_prediction(
     symbol: str,
-    _=Depends(require_feature("onchain_prediction")),
     redis=Depends(get_redis),
 ):
     sym = symbol.upper().strip()
@@ -31,7 +29,6 @@ async def get_prediction(
 @router.post("/{symbol}/refresh")
 async def refresh_prediction(
     symbol: str,
-    _=Depends(require_feature("onchain_prediction")),
     redis=Depends(get_redis),
 ):
     sym = symbol.upper().strip()

@@ -47,12 +47,23 @@ async def _fetch_all(symbol: str):
 def _current_price(ohlcv: pd.DataFrame | None) -> float:
     if ohlcv is None or ohlcv.empty:
         return 0.0
-    return round(float(ohlcv["Close"].squeeze().iloc[-1]), 2)
+    try:
+        col = ohlcv["Close"]
+        if isinstance(ohlcv.columns, pd.MultiIndex):
+            col = col.squeeze()
+        return round(float(col.dropna().iloc[-1]), 2)
+    except Exception:
+        return 0.0
 
 
 def _support_resistance(ohlcv: pd.DataFrame | None) -> tuple[float | None, float | None]:
     if ohlcv is None or len(ohlcv) < 20:
         return None, None
-    close = ohlcv["Close"].squeeze()
-    recent = close.tail(20)
-    return round(float(recent.min()), 2), round(float(recent.max()), 2)
+    try:
+        col = ohlcv["Close"]
+        if isinstance(ohlcv.columns, pd.MultiIndex):
+            col = col.squeeze()
+        recent = col.dropna().tail(20)
+        return round(float(recent.min()), 2), round(float(recent.max()), 2)
+    except Exception:
+        return None, None
