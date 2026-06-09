@@ -5,7 +5,7 @@ services:
   postgres:
     image: postgres:16-alpine
     container_name: osf_postgres
-    restart: unless-stopped
+    restart: always
     environment:
       POSTGRES_DB: osf
       POSTGRES_USER: osf_user
@@ -23,7 +23,7 @@ services:
   redis:
     image: redis:7-alpine
     container_name: osf_redis
-    restart: unless-stopped
+    restart: always
     command: redis-server --appendonly yes
     volumes:
       - redis_data:/data
@@ -42,9 +42,11 @@ services:
       context: ./backend
       dockerfile: Dockerfile
     container_name: osf_api
-    restart: unless-stopped
+    restart: always
     command: uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload
     env_file: ./backend/.env
+    environment:
+      - PYTHONPATH=/app
     volumes:
       - ./backend:/app
     ports:
@@ -60,9 +62,11 @@ services:
       context: ./backend
       dockerfile: Dockerfile
     container_name: osf_worker
-    restart: unless-stopped
+    restart: always
     command: celery -A app.celery_app worker --loglevel=info --concurrency=4
     env_file: ./backend/.env
+    environment:
+      - PYTHONPATH=/app
     volumes:
       - ./backend:/app
     depends_on:
@@ -76,9 +80,11 @@ services:
       context: ./backend
       dockerfile: Dockerfile
     container_name: osf_beat
-    restart: unless-stopped
+    restart: always
     command: celery -A app.celery_app beat --loglevel=info --scheduler=celery.beat:PersistentScheduler
     env_file: ./backend/.env
+    environment:
+      - PYTHONPATH=/app
     volumes:
       - ./backend:/app
     depends_on:
@@ -93,17 +99,11 @@ services:
     build:
       context: ./frontend
       dockerfile: Dockerfile
-      target: dev
+      target: prod
     container_name: osf_frontend
-    restart: unless-stopped
-    environment:
-      - VITE_API_URL=http://localhost:8000/api/v1
-      - VITE_WS_URL=ws://localhost:8000
-    volumes:
-      - ./frontend:/app
-      - /app/node_modules
+    restart: always
     ports:
-      - "3000:3000"
+      - "3000:80"
     depends_on:
       - api
 
