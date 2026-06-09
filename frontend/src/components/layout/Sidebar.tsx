@@ -9,6 +9,7 @@ import {
   ChevronLeft,
   ChevronRight,
   Zap,
+  Activity,
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { useUiStore } from '@/stores/ui.store'
@@ -20,6 +21,7 @@ const NAV_ITEMS = [
   { to: '/insiders',  icon: Users,            label: 'Insider Trades' },
   { to: '/sentiment', icon: Brain,            label: 'Sentiment' },
   { to: '/trend',     icon: TrendingUp,       label: 'Trend Reversal' },
+  { to: '/onchain',   icon: Activity,         label: 'Chain Prediction' },
 ]
 
 export function Sidebar() {

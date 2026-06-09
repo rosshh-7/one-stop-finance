@@ -10,6 +10,7 @@ FEATURE_FLAGS: dict[str, str] = {
     "insider_trades":      "free",
     "sentiment_analysis":  "free",
     "trend_reversal":      "free",
+    "onchain_prediction":  "free",
 }
 
 

@@ -8,6 +8,7 @@ import { InsidersPage } from '@/pages/InsidersPage'
 import { SentimentPage } from '@/pages/SentimentPage'
 import { TrendPage } from '@/pages/TrendPage'
 import { SearchPage } from '@/pages/SearchPage'
+import { OnchainPage } from '@/pages/OnchainPage'
 
 export default function App() {
   return (
@@ -24,6 +25,7 @@ export default function App() {
         <Route path="/sentiment" element={<SentimentPage />} />
         <Route path="/trend"     element={<TrendPage />} />
         <Route path="/search"    element={<SearchPage />} />
+        <Route path="/onchain"   element={<OnchainPage />} />
       </Route>
 
       <Route path="*" element={<Navigate to="/" replace />} />

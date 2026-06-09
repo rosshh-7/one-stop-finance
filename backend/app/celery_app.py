@@ -13,6 +13,7 @@ celery = Celery(
         "app.workers.theme_intelligence",
         "app.workers.trend_signals",
         "app.workers.realtime_push",
+        "app.workers.onchain_prediction",
     ],
 )
 
@@ -62,5 +63,10 @@ celery.conf.beat_schedule = {
     "push-realtime-quotes": {
         "task": "app.workers.realtime_push.push_quotes",
         "schedule": 15.0,
+    },
+    # On-chain prediction pre-compute — every 15 min
+    "precompute-onchain-predictions": {
+        "task": "workers.onchain_prediction.precompute",
+        "schedule": 900.0,
     },
 }

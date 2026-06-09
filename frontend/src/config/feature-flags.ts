@@ -6,6 +6,7 @@ export const FEATURE_FLAGS: Record<string, FeatureTier> = {
   insider_trades: 'free',
   sentiment_analysis: 'free',
   trend_reversal: 'free',
+  onchain_prediction: 'free',
 } as const
 
 export type FeatureName = keyof typeof FEATURE_FLAGS

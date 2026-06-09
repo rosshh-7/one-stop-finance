@@ -18,6 +18,7 @@ from app.features.sentiment.router import router as sentiment_router
 from app.features.trend.router import router as trend_router
 from app.features.search.router import router as search_router
 from app.features.realtime.router import router as realtime_router
+from app.features.onchain_prediction.router import router as onchain_router
 
 API_PREFIX = "/api/v1"
 
@@ -40,10 +41,17 @@ app = FastAPI(
     redoc_url="/redoc",
 )
 
-# CORS
+# CORS — allow configured origin plus common local dev ports
+_cors_origins = list({
+    settings.frontend_url,
+    "http://localhost:3000",
+    "http://localhost:5173",
+    "http://127.0.0.1:5173",
+})
+
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=[settings.frontend_url],
+    allow_origins=_cors_origins,
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -65,6 +73,7 @@ for router in [
     sentiment_router,
     trend_router,
     search_router,
+    onchain_router,
 ]:
     app.include_router(router, prefix=API_PREFIX)
 
