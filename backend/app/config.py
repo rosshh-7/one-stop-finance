@@ -25,6 +25,10 @@ class Settings(BaseSettings):
     # External APIs
     news_api_key: str = ""
     polygon_api_key: str = ""
+    edgar_user_agent: str = "OneStopFinance contact@onestopfinance.com"
+    fmp_api_key: str = ""
+    anthropic_api_key: str = ""
+    fred_api_key: str = ""  # fred.stlouisfed.org — macro data (free, instant signup)
 
     # App
     frontend_url: str = "http://localhost:3000"
