@@ -14,7 +14,6 @@ import httpx
 from sqlalchemy import select
 
 from app.celery_app import celery
-from app.config import settings
 from app.database import celery_session
 from app.models.base import new_uuid
 from app.models.theme import Theme, GovContract
@@ -71,18 +70,100 @@ _THEME_KEYWORDS: dict[str, list[str]] = {
     ],
 }
 
+# Recipient company name fragments → theme slug
+# USASpending often returns NULL or very generic descriptions for large awards,
+# so we fall back to matching well-known contractors by name.
+_RECIPIENT_SLUGS: list[tuple[str, str]] = [
+    # Defense & Aerospace
+    ("lockheed martin",          "defense-aerospace"),
+    ("northrop grumman",         "defense-aerospace"),
+    ("raytheon",                 "defense-aerospace"),
+    ("general dynamics",         "defense-aerospace"),
+    ("l3harris",                 "defense-aerospace"),
+    ("l3 harris",                "defense-aerospace"),
+    ("huntington ingalls",       "defense-aerospace"),
+    ("boeing defense",           "defense-aerospace"),
+    ("bae systems",              "defense-aerospace"),
+    ("leidos",                   "defense-aerospace"),
+    ("saic",                     "defense-aerospace"),
+    ("textron",                  "defense-aerospace"),
+    ("curtiss-wright",           "defense-aerospace"),
+    ("harris corporation",       "defense-aerospace"),
+    ("kaman aerospace",          "defense-aerospace"),
+    ("the boeing company",       "defense-aerospace"),
+    # Nuclear energy / DOE labs
+    ("sandia national",          "nuclear-energy"),
+    ("lawrence livermore",       "nuclear-energy"),
+    ("ut-battelle",              "nuclear-energy"),
+    ("battelle energy alliance", "nuclear-energy"),
+    ("savannah river nuclear",   "nuclear-energy"),
+    ("consolidated nuclear",     "nuclear-energy"),
+    ("triad national security",  "nuclear-energy"),
+    ("nuclear security",         "nuclear-energy"),
+    ("bechtel national",         "nuclear-energy"),
+    ("fluor federal",            "nuclear-energy"),
+    ("nuclear solutions",        "nuclear-energy"),
+    ("nuclear security",         "nuclear-energy"),
+    # Broad fallback for remaining DOE national labs
+    ("national technology & engineering solutions", "nuclear-energy"),
+    ("lawrence berkeley",        "nuclear-energy"),
+    ("fermi research",           "nuclear-energy"),
+    ("battelle memorial",        "nuclear-energy"),
+    ("regents of the university of california",  "nuclear-energy"),
+    ("uchicago argonne",         "nuclear-energy"),
+    ("honeywell federal",        "nuclear-energy"),
+    ("brookhaven science",       "nuclear-energy"),
+    ("fluor marine propulsion",  "nuclear-energy"),
+    ("fluor-bwxt",               "nuclear-energy"),
+    ("mission support & test services", "nuclear-energy"),
+    ("wyle laboratories",        "nuclear-energy"),
+    # Space
+    ("spacex",                   "space-satellite"),
+    ("space exploration",        "space-satellite"),
+    ("rocket lab",               "space-satellite"),
+    ("united launch alliance",   "space-satellite"),
+    ("blue origin",              "space-satellite"),
+    ("sierra space",             "space-satellite"),
+    ("planet labs",              "space-satellite"),
+    ("maxar",                    "space-satellite"),
+    ("spire global",             "space-satellite"),
+    # Cybersecurity
+    ("crowdstrike",              "cybersecurity"),
+    ("palo alto networks",       "cybersecurity"),
+    ("booz allen",               "cybersecurity"),
+    ("mandiant",                 "cybersecurity"),
+    # Drones
+    ("aerovironment",            "drone-autonomous"),
+    ("kratos defense",           "drone-autonomous"),
+    ("shield ai",                "drone-autonomous"),
+    ("joby aviation",            "drone-autonomous"),
+    # AI
+    ("palantir",                 "ai-infrastructure"),
+]
+
 
 def _match_theme(description: str, recipient: str) -> str | None:
-    text = (description + " " + recipient).lower()
-    for slug, keywords in _THEME_KEYWORDS.items():
-        if any(kw in text for kw in keywords):
-            return slug
+    # Try description keywords first (when description is populated)
+    if description:
+        text = description.lower()
+        for slug, keywords in _THEME_KEYWORDS.items():
+            if any(kw in text for kw in keywords):
+                return slug
+
+    # Fall back to recipient name matching — USASpending often returns
+    # NULL or very generic descriptions for large multi-year contracts
+    if recipient:
+        recipient_lower = recipient.lower()
+        for fragment, slug in _RECIPIENT_SLUGS:
+            if fragment in recipient_lower:
+                return slug
+
     return None
 
 
 async def _get_theme_id(session, slug: str) -> str | None:
     row = (await session.execute(
-        select(Theme.id).where(Theme.slug == slug)
+        select(Theme.id).where(Theme.slug == slug).where(Theme.is_active == True)
     )).scalar_one_or_none()
     return row
 
@@ -165,6 +246,22 @@ async def _run():
             inserted += 1
 
         await session.commit()
+
+        # Backfill any previously-inserted contracts with NULL theme_id
+        null_contracts = (await session.execute(
+            select(GovContract).where(GovContract.theme_id == None)
+        )).scalars().all()
+        backfilled = 0
+        for contract in null_contracts:
+            slug = _match_theme(contract.description or "", contract.recipient_name or "")
+            if slug:
+                tid = await _get_theme_id(session, slug)
+                if tid:
+                    contract.theme_id = tid
+                    backfilled += 1
+        if backfilled:
+            await session.commit()
+        logger.info("contracts_data: backfilled %d existing NULL-theme contracts", backfilled)
 
     logger.info("contracts_data: %d inserted, %d skipped", inserted, skipped)
 
